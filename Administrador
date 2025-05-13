@@ -1,0 +1,128 @@
+import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Administrador {
+    private static char[][] laberinto;
+    private static int tamaño;
+    private static Scanner sc = new Scanner(System.in);
+
+    public static void main(String[] args) {
+        System.out.println("----- MODO ADMINISTRADOR -----");
+        System.out.print("Introduce el tamaño del laberinto (n x n): ");
+        tamaño = sc.nextInt();
+        inicializarLaberinto();
+        diseñarRutaPrincipal();
+        añadirCaminosAlternativos();
+        mostrarLaberintoFinal();
+    }
+
+    private static void inicializarLaberinto() {
+        laberinto = new char[tamaño][tamaño];
+        for (int i = 0; i < tamaño; i++) {
+            for (int j = 0; j < tamaño; j++) {
+                laberinto[i][j] = '|'; // Paredes por defecto
+            }
+        }
+        laberinto[0][0] = '*'; // Inicio
+        laberinto[tamaño - 1][tamaño - 1] = '='; // Salida (esquina inferior derecha)
+    }
+
+    private static void diseñarRutaPrincipal() {
+        System.out.println("\n--- Diseña la RUTA PRINCIPAL ('-') ---");
+        System.out.println("Conecta desde (0 0) hasta (" + (tamaño - 1) + " " + (tamaño - 1) + ").");
+
+        int filaActual = 0;
+        int colActual = 0;
+        List<String> rutaPrincipal = new ArrayList<>();
+        rutaPrincipal.add(filaActual + " " + colActual);
+
+        while (true) {
+            mostrarLaberintoCompleto(); // Mostrar laberinto completo en cada paso
+            System.out.print("Siguiente coordenada (fila columna) o 'fin': ");
+            String input = sc.next();
+            if (input.equalsIgnoreCase("fin")) break;
+
+            int fila = Integer.parseInt(input);
+            int col = sc.nextInt();
+
+            if (esCoordenadaValida(fila, col, filaActual, colActual)) {
+                laberinto[fila][col] = '-';
+                rutaPrincipal.add(fila + " " + col);
+                filaActual = fila;
+                colActual = col;
+
+                // Verificar si llegó al final
+                if (fila == tamaño - 1 && col == tamaño - 1) {
+                    System.out.println("¡Ruta principal completada!");
+                    break;
+                }
+            } else {
+                System.out.println("¡Coordenada inválida! Debe ser adyacente y no sobrescribir la salida.");
+            }
+        }
+    }
+
+    private static void añadirCaminosAlternativos() {
+        System.out.println("\n--- Añade CAMINOS ALTERNATIVOS ('/') ---");
+        while (true) {
+            mostrarLaberintoCompleto(); // Mostrar laberinto actualizado
+            System.out.print("¿Añadir camino alternativo? (Si/No): ");
+            String respuesta = sc.next();
+            if (!respuesta.equalsIgnoreCase("si")) break;
+
+            System.out.print("Coordenada de inicio (fila columna, debe estar en la ruta principal): ");
+            int filaInicio = sc.nextInt();
+            int colInicio = sc.nextInt();
+
+            if (laberinto[filaInicio][colInicio] != '-' && laberinto[filaInicio][colInicio] != '*') {
+                System.out.println("¡Error: La coordenada debe estar en la ruta principal!");
+                continue;
+            }
+
+            System.out.println("Introduce coordenadas para el camino alternativo ('terminado' para finalizar):");
+            int filaActual = filaInicio;
+            int colActual = colInicio;
+
+            while (true) {
+                mostrarLaberintoCompleto();
+                System.out.print("Siguiente coordenada (fila columna) o 'terminado': ");
+                String input = sc.next();
+                if (input.equalsIgnoreCase("terminado")) break;
+
+                int fila = Integer.parseInt(input);
+                int col = sc.nextInt();
+
+                if (esCoordenadaValida(fila, col, filaActual, colActual) && laberinto[fila][col] != '=') {
+                    laberinto[fila][col] = '/';
+                    filaActual = fila;
+                    colActual = col;
+                } else {
+                    System.out.println("¡Coordenada inválida! No puede ser la salida ni estar fuera de los límites.");
+                }
+            }
+        }
+    }
+
+    private static void mostrarLaberintoCompleto() {
+        System.out.println("\n--- LABERINTO ACTUAL ---");
+        for (int i = 0; i < tamaño; i++) {
+            for (int j = 0; j < tamaño; j++) {
+                System.out.print(laberinto[i][j] + " ");
+            }
+            System.out.println();
+        }
+    }
+
+    private static void mostrarLaberintoFinal() {
+        System.out.println("\n--- LABERINTO FINAL ---");
+        mostrarLaberintoCompleto();
+    }
+
+    private static boolean esCoordenadaValida(int fila, int col, int filaActual, int colActual) {
+        boolean esAdyacente = Math.abs(fila - filaActual) <= 1 && Math.abs(col - colActual) <= 1;
+        boolean dentroLimites = fila >= 0 && fila < tamaño && col >= 0 && col < tamaño;
+        boolean noEsSalida = !(fila == tamaño - 1 && col == tamaño - 1);
+        return esAdyacente && dentroLimites && noEsSalida;
+    }
+}
