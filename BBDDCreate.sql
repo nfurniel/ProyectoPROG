@@ -33,3 +33,8 @@ CREATE TABLE Ranking (
     FOREIGN KEY (Laberinto) REFERENCES Laberintos(id),
 	FOREIGN KEY (Disposicion) REFERENCES Disposiciones(id)
 );
+CREATE TABLE Preguntas (
+	id INT PRIMARY KEY,
+    Pregunta VARCHAR(255),
+    Respuesta VARCHAR(255)
+);
