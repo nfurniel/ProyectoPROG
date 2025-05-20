@@ -1,0 +1,289 @@
+package pruebas;
+
+import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Administrador {
+    private static char[][] laberinto;
+    private static int tamaño;
+    private static Scanner scn = new Scanner(System.in);
+    private static List<String> celdasVisitadas = new ArrayList<>();
+    private static String nombreLaberinto;
+    private static int numBotiquines;
+    private static int numCocodrilos;
+    private static int vidaBotiquines;
+    private static int vidaCocodrilos;
+
+    public static void main(String[] args) {
+        System.out.println("----- MODO ADMINISTRADOR -----");
+        try {
+            nombreLaberinto = solicitarNombreLaberinto();
+            tamaño = solicitarTamañoLaberinto();
+            solicitarElementos();
+            inicializarLaberinto();
+            diseñarRutaPrincipal();
+            añadirCaminosAlternativos();
+            mostrarLaberintoFinal();
+        } catch (IllegalArgumentException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static String solicitarNombreLaberinto() {
+        System.out.print("Introduce el nombre del laberinto: ");
+        return scn.nextLine();
+    }
+
+    private static void solicitarElementos() {
+        numBotiquines = solicitarNumero("Número de botiquines (0 para ninguno): ", true);
+        if (numBotiquines > 0) {
+            vidaBotiquines = solicitarNumero("Vida que curan los botiquines: ", false);
+        }
+
+        numCocodrilos = solicitarNumero("Número de cocodrilos (0 para ninguno): ", true);
+        if (numCocodrilos > 0) {
+            vidaCocodrilos = solicitarNumero("Vida que quitan los cocodrilos: ", false);
+        }
+    }
+    
+    private static int solicitarNumero(String mensaje, boolean permitirCero) {
+        while (true) {
+            try {
+                System.out.print(mensaje);
+                if (!scn.hasNextInt()) {
+                    System.out.println("Error: Debe ser un número entero");
+                    scn.next();
+                    continue;
+                }
+                
+                int numero = scn.nextInt();
+                scn.nextLine();
+                
+                if (numero < 0) {
+                    System.out.println("Error: El número no puede ser negativo");
+                    continue;
+                }
+                
+                if (!permitirCero && numero == 0) {
+                    System.out.println("Error: El número no puede ser cero");
+                    continue;
+                }
+                
+                return numero;
+            } catch (Exception e) {
+                System.out.println("Error inesperado: " + e.getMessage());
+                scn.nextLine();
+            }
+        }
+    }
+
+    private static int solicitarTamañoLaberinto() {
+        while (true) {
+            try {
+                System.out.print("Introduce el tamaño del laberinto (n x n, mínimo 5): ");
+                if (!scn.hasNextInt()) {
+                    System.out.println("Error: '" + scn.next() + "' no es un número entero válido");
+                    continue;
+                }
+                
+                int tamano = scn.nextInt();
+                scn.nextLine();
+                
+                if (tamano == 0) {
+                    throw new IllegalArgumentException("El tamaño no puede ser 0x0");
+                }
+                if (tamano < 5) {
+                    throw new IllegalArgumentException("El tamaño mínimo debe ser 5x5");
+                }
+                return tamano;
+            } catch (IllegalArgumentException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void inicializarLaberinto() {
+        laberinto = new char[tamaño][tamaño];
+        for (int i = 0; i < tamaño; i++) {
+            for (int j = 0; j < tamaño; j++) {
+                laberinto[i][j] = '|';
+            }
+        }
+        laberinto[0][0] = '*';
+        laberinto[tamaño - 1][tamaño - 1] = '=';
+        celdasVisitadas.add("0 0");
+    }
+
+    private static void diseñarRutaPrincipal() {
+        System.out.println("\n--- Diseña la RUTA PRINCIPAL ('-') ---\n");
+        System.out.println("Conecta desde (0 0) hasta (" + (tamaño - 1) + " " + (tamaño - 1) + ").");
+        System.out.println("ATENCIÓN: No podrás volver a celdas ya visitadas en la ruta principal.");
+
+        int filaActual = 0;
+        int colActual = 0;
+        List<String> rutaPrincipal = new ArrayList<>();
+        rutaPrincipal.add(filaActual + " " + colActual);
+
+        while (true) {
+            mostrarLaberintoActual();
+            System.out.print("Siguiente coordenada (fila columna): ");
+            
+            try {
+                int fila = scn.nextInt();
+                int col = scn.nextInt();
+
+                if (fila < 0 || fila >= tamaño || col < 0 || col >= tamaño) {
+                    throw new IndexOutOfBoundsException("Coordenadas fuera de rango (0-" + (tamaño - 1) + ")");
+                }
+
+                if (fila == tamaño - 1 && col == tamaño - 1) {
+                    if (esCoordenadaValidaRutaPrincipal(fila, col, filaActual, colActual)) {
+                        break;
+                    } else {
+                        throw new IllegalArgumentException("Debes llegar a la salida desde una celda adyacente");
+                    }
+                }
+
+                if (laberinto[fila][col] == '*') {
+                    throw new IllegalArgumentException("No puedes volver a modificar la entrada (*)");
+                }
+
+                if (esCoordenadaValidaRutaPrincipal(fila, col, filaActual, colActual)) {
+                    laberinto[fila][col] = '-';
+                    rutaPrincipal.add(fila + " " + col);
+                    celdasVisitadas.add(fila + " " + col);
+                    filaActual = fila;
+                    colActual = col;
+                } else {
+                    System.out.println("¡Coordenada inválida! Razones posibles:");
+                    System.out.println("- No es adyacente a la posición actual");
+                    System.out.println("- Ya fue visitada en la ruta principal");
+                }
+            } catch (java.util.InputMismatchException e) {
+                System.out.println("Error: Debes ingresar números válidos para las coordenadas");
+                scn.nextLine();
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+        System.out.println("¡Ruta principal completada!");
+    }
+
+    private static boolean esCoordenadaValidaRutaPrincipal(int fila, int col, int filaActual, int colActual) {
+        boolean esAdyacente = Math.abs(fila - filaActual) <= 1 && Math.abs(col - colActual) <= 1;
+        boolean noVisitada = !celdasVisitadas.contains(fila + " " + col);
+        
+        if (fila == tamaño - 1 && col == tamaño - 1) {
+            return esAdyacente;
+        }
+        
+        return esAdyacente && noVisitada;
+    }
+
+    private static void añadirCaminosAlternativos() {
+        System.out.println("\n--- Añade CAMINOS ALTERNATIVOS ('/') ---");
+        while (true) {
+            mostrarLaberintoActual();
+            System.out.print("¿Añadir camino alternativo? (Si/No): ");
+            String respuesta = scn.next();
+            if (!respuesta.equalsIgnoreCase("si")) {
+                break;
+            }
+
+            try {
+                System.out.print("Coordenada de inicio (fila columna, debe estar en la ruta principal): ");
+                int filaInicio = scn.nextInt();
+                int colInicio = scn.nextInt();
+
+                if (filaInicio < 0 || filaInicio >= tamaño || colInicio < 0 || colInicio >= tamaño) {
+                    throw new IndexOutOfBoundsException("Coordenadas fuera de rango (0-" + (tamaño - 1) + ")");
+                }
+
+                if (laberinto[filaInicio][colInicio] != '-' && laberinto[filaInicio][colInicio] != '*') {
+                    throw new IllegalArgumentException("La coordenada debe estar en la ruta principal (- o *)");
+                }
+
+                System.out.println("Introduce coordenadas para el camino alternativo:");
+                int filaActual = filaInicio;
+                int colActual = colInicio;
+
+                while (true) {
+                    mostrarLaberintoActual();
+                    System.out.print("Siguiente coordenada (fila columna): ");
+                    
+                    try {
+                        int fila = scn.nextInt();
+                        int col = scn.nextInt();
+
+                        if (fila < 0 || fila >= tamaño || col < 0 || col >= tamaño) {
+                            throw new IndexOutOfBoundsException("Coordenadas fuera de rango (0-" + (tamaño - 1) + ")");
+                        }
+
+                        if (laberinto[fila][col] == '*' || laberinto[fila][col] == '=') {
+                            throw new IllegalArgumentException("No puedes modificar la entrada (*) o salida (=)");
+                        }
+
+                        if (esCoordenadaValida(fila, col, filaActual, colActual)) {
+                            laberinto[fila][col] = '/';
+                            filaActual = fila;
+                            colActual = col;
+                        } else {
+                            System.out.println("¡Coordenada inválida! Debe ser adyacente a la posición actual.");
+                        }
+                    } catch (java.util.InputMismatchException e) {
+                        System.out.println("Error: Debes ingresar números válidos para las coordenadas");
+                        scn.nextLine(); 
+                        break;
+                    } catch (Exception e) {
+                        System.out.println("Error: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+                scn.nextLine();
+            }
+        }
+    }
+
+    private static boolean esCoordenadaValida(int fila, int col, int filaActual, int colActual) {
+        return Math.abs(fila - filaActual) <= 1 && Math.abs(col - colActual) <= 1;
+    }
+
+    private static void mostrarLaberintoActual() {
+        System.out.println("\n--- LABERINTO ACTUAL ---");
+        System.out.print("   ");
+        for (int j = 0; j < tamaño; j++) {
+            System.out.print(j + " ");
+        }
+        System.out.println();
+        
+        for (int i = 0; i < tamaño; i++) {
+            System.out.print(i + "  ");
+            for (int j = 0; j < tamaño; j++) {
+                System.out.print(laberinto[i][j] + " ");
+            }
+            System.out.println();
+        }
+    }
+
+    private static void mostrarLaberintoFinal() {
+        System.out.println("\n--- LABERINTO FINAL: " + nombreLaberinto + " ---");
+        System.out.println("Botiquines: " + numBotiquines + " (cura: " + vidaBotiquines + ")");
+        System.out.println("Cocodrilos: " + numCocodrilos + " (daño: " + vidaCocodrilos + ")");
+        
+        System.out.print("   ");
+        for (int j = 0; j < tamaño; j++) {
+            System.out.print(j + " ");
+        }
+        System.out.println();
+        
+        for (int i = 0; i < tamaño; i++) {
+            System.out.print(i + "  ");
+            for (int j = 0; j < tamaño; j++) {
+                System.out.print(laberinto[i][j] + " ");
+            }
+            System.out.println();
+        }
+    }
+}
