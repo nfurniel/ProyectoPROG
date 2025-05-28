@@ -1,5 +1,6 @@
 package BBDD;
 
+import java.util.*;
 import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
@@ -214,7 +215,7 @@ public class AdministradorBBDD {
                     System.out.println("- No es adyacente a la posición actual");
                     System.out.println("- Ya fue visitada en la ruta principal");
                 }
-            } catch (java.util.InputMismatchException e) {
+            } catch (InputMismatchException e) {
                 System.out.println("Error: Debes ingresar números válidos para las coordenadas");
                 scn.nextLine();
             } catch (Exception e) {
