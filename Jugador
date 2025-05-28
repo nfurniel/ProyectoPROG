@@ -1,0 +1,399 @@
+package BBDD;
+
+import java.sql.*;
+import java.util.Scanner;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Random;
+
+public class JugadorLaberinto {
+    private static Connection conexion;
+    private static Scanner scn = new Scanner(System.in);
+    private static int vidaJugador = 100;
+    private static int posX, posY;
+    private static char[][] laberinto;
+    private static boolean[][] visitado; // Para trackear las casillas visitadas
+    private static int tamaño;
+    private static String usuario;
+
+    public static void main(String[] args) {
+        conectarBD();
+        mostrarLaberintosDisponibles();
+        jugar();
+        cerrarConexion();
+    }
+
+    private static void conectarBD() {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            conexion = DriverManager.getConnection(
+                "jdbc:mysql://localhost/laberintobueno", 
+                "root", 
+                "nevado2005"
+            );
+        } catch (Exception e) {
+            System.err.println("Error al conectar con la BD: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private static void mostrarLaberintosDisponibles() {
+        try (Statement stmt = conexion.createStatement()) {
+            ResultSet rs = stmt.executeQuery(
+                "SELECT id, dimension1, cocodrilos, botiquines FROM Laberintos"
+            );
+            
+            System.out.println("\nLABERINTOS DISPONIBLES:");
+            while (rs.next()) {
+                System.out.printf(
+                    "ID: %d - Tamaño: %dx%d - Cocodrilos: %d - Botiquines: %d%n",
+                    rs.getInt("id"),
+                    rs.getInt("dimension1"),
+                    rs.getInt("dimension1"),
+                    rs.getInt("cocodrilos"),
+                    rs.getInt("botiquines")
+                );
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al obtener laberintos: " + e.getMessage());
+        }
+    }
+
+    private static void jugar() {
+        System.out.print("\nIntroduce tu nombre de usuario: ");
+        usuario = scn.nextLine();
+        
+        System.out.print("Selecciona el ID del laberinto: ");
+        int idLaberinto = scn.nextInt();
+        scn.nextLine();
+
+        cargarLaberinto(idLaberinto);
+        iniciarJuego();
+    }
+
+    private static void cargarLaberinto(int idLaberinto) {
+        try {
+            // Obtener configuración del laberinto
+            PreparedStatement psLab = conexion.prepareStatement(
+                "SELECT dimension1, cocodrilos, botiquines, dmgCocodrilo FROM Laberintos WHERE id = ?"
+            );
+            psLab.setInt(1, idLaberinto);
+            ResultSet rsLab = psLab.executeQuery();
+            
+            if (rsLab.next()) {
+                tamaño = rsLab.getInt("dimension1");
+                laberinto = new char[tamaño][tamaño];
+                inicializarLaberinto();
+            }
+
+            // Obtener disposición
+            PreparedStatement psDisposicion = conexion.prepareStatement(
+                "SELECT id FROM Disposiciones WHERE id_laberinto = ? LIMIT 1"
+            );
+            psDisposicion.setInt(1, idLaberinto);
+            ResultSet rsDisposicion = psDisposicion.executeQuery();
+            
+            if (rsDisposicion.next()) {
+                int idDisposicion = rsDisposicion.getInt("id");
+                cargarPuertas(idDisposicion);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al cargar laberinto: " + e.getMessage());
+        }
+    }
+
+    private static void inicializarLaberinto() {
+        for (int i = 0; i < tamaño; i++) {
+            for (int j = 0; j < tamaño; j++) {
+                laberinto[i][j] = ' ';
+            }
+        }
+        
+        // Inicializar matriz de visitado
+        visitado = new boolean[tamaño][tamaño];
+        for (int i = 0; i < tamaño; i++) {
+            for (int j = 0; j < tamaño; j++) {
+                visitado[i][j] = false;
+            }
+        }
+        
+        laberinto[0][0] = '*';
+        laberinto[tamaño-1][tamaño-1] = '=';
+        posX = 0;
+        posY = 0;
+        
+        // Marcar la posición inicial como visitada
+        visitado[posX][posY] = true;
+    }
+
+    private static void cargarPuertas(int idDisposicion) throws SQLException {
+        PreparedStatement ps = conexion.prepareStatement(
+            "SELECT coord1, coord2 FROM Puertas WHERE id_disposicion = ? ORDER BY posicion"
+        );
+        ps.setInt(1, idDisposicion);
+        ResultSet rs = ps.executeQuery();
+        
+        while (rs.next()) {
+            int x = rs.getInt("coord1");
+            int y = rs.getInt("coord2");
+            if (laberinto[x][y] != '*' && laberinto[x][y] != '=') {
+                laberinto[x][y] = '-';
+            }
+        }
+    }
+
+    private static void iniciarJuego() {
+        System.out.println("\n¡COMIENZA EL JUEGO!");
+        System.out.println("Estás en la entrada del laberinto. Debes llegar a la salida sin saber exactamente dónde te encuentras.");
+        System.out.println("Solo recibirás pistas sobre los movimientos disponibles y eventos que ocurran.");
+        
+        while (vidaJugador > 0) {
+            mostrarEstadoJuego();
+            procesarMovimiento();
+            verificarCasillaActual();
+            if (haGanado()) {
+                System.out.println("\n¡FELICIDADES! ¡HAS LLEGADO A LA SALIDA!");
+                guardarResultado(true);
+                mostrarRanking();
+                return;
+            }
+        }
+        guardarResultado(false);
+        System.out.println("¡HAS PERDIDO TODA TU VIDA!");
+    }
+
+    private static void mostrarEstadoJuego() {
+        System.out.println("\n--- MAPA EXPLORADO ---");
+        mostrarMapaExplorado();
+        System.out.printf("Vida actual: %d%n", vidaJugador);
+        
+        // Solo mostrar información sobre movimientos disponibles
+        System.out.print("Movimientos disponibles: ");
+        List<String> movimientosDisponibles = new ArrayList<>();
+        
+        if (posX > 0 && esMovimientoValido(posX-1, posY)) {
+            movimientosDisponibles.add("W (Norte)");
+        }
+        if (posX < tamaño-1 && esMovimientoValido(posX+1, posY)) {
+            movimientosDisponibles.add("S (Sur)");
+        }
+        if (posY > 0 && esMovimientoValido(posX, posY-1)) {
+            movimientosDisponibles.add("A (Oeste)");
+        }
+        if (posY < tamaño-1 && esMovimientoValido(posX, posY+1)) {
+            movimientosDisponibles.add("D (Este)");
+        }
+        
+        if (movimientosDisponibles.isEmpty()) {
+            System.out.println("¡NINGUNO! Estás atrapado.");
+        } else {
+            System.out.println(String.join(", ", movimientosDisponibles));
+        }
+        
+        // Dar pistas sutiles sobre la ubicación
+        darPistasUbicacion();
+    }
+    
+    private static void mostrarMapaExplorado() {
+        System.out.println("Leyenda: [?] = No explorado, [-] = Camino, [#] = Pared, [*] = Entrada, [=] = Salida");
+        System.out.println("         [C] = Cocodrilo encontrado, [B] = Botiquín encontrado, [X] = Tu posición actual");
+        System.out.println();
+        
+        // Mostrar coordenadas superiores
+        System.out.print("   ");
+        for (int j = 0; j < tamaño; j++) {
+            System.out.printf("%2d ", j);
+        }
+        System.out.println();
+        
+        for (int i = 0; i < tamaño; i++) {
+            System.out.printf("%2d ", i); // Mostrar coordenada de fila
+            for (int j = 0; j < tamaño; j++) {
+                if (i == posX && j == posY) {
+                    // Mostrar posición actual del jugador
+                    System.out.print(" X ");
+                } else if (visitado[i][j]) {
+                    // Mostrar casilla visitada
+                    char casilla = laberinto[i][j];
+                    if (casilla == '*') {
+                        System.out.print(" * ");
+                    } else if (casilla == '=') {
+                        System.out.print(" = ");
+                    } else if (casilla == '-') {
+                        System.out.print(" - ");
+                    } else if (casilla == 'C') {
+                        System.out.print(" C ");
+                    } else if (casilla == 'B') {
+                        System.out.print(" B ");
+                    } else {
+                        System.out.print(" - ");
+                    }
+                } else {
+                    // Mostrar casillas adyacentes como paredes si no se puede acceder
+                    if (esAdyacente(i, j) && !esMovimientoValido(i, j)) {
+                        System.out.print(" # ");
+                    } else {
+                        System.out.print(" ? ");
+                    }
+                }
+            }
+            System.out.println();
+        }
+        System.out.println();
+    }
+    
+    private static boolean esAdyacente(int x, int y) {
+        // Verifica si una casilla es adyacente a la posición actual
+        return Math.abs(x - posX) + Math.abs(y - posY) == 1;
+    }
+    
+    private static void darPistasUbicacion() {
+        // Pistas sutiles sin revelar la posición exacta
+        if (posX == 0 && posY == 0) {
+            System.out.println("💡 Sientes que estás en el punto de partida del laberinto.");
+        } else if (posX == tamaño-1 && posY == tamaño-1) {
+            System.out.println("🎯 ¡Sientes una brisa fresca! La salida debe estar muy cerca.");
+        } else {
+            // Dar pistas sobre qué tan cerca está de los bordes
+            if (posX == 0) {
+                System.out.println("💡 Sientes una pared sólida al norte.");
+            } else if (posX == tamaño-1) {
+                System.out.println("💡 Sientes una pared sólida al sur.");
+            }
+            
+            if (posY == 0) {
+                System.out.println("💡 Sientes una pared sólida al oeste.");
+            } else if (posY == tamaño-1) {
+                System.out.println("💡 Sientes una pared sólida al este.");
+            }
+            
+            // Pista sobre qué tan lejos está de la salida (aproximadamente)
+            int distanciaASalida = Math.abs(posX - (tamaño-1)) + Math.abs(posY - (tamaño-1));
+            if (distanciaASalida <= 2) {
+                System.out.println("🌟 Sientes que la salida está muy cerca...");
+            } else if (distanciaASalida <= tamaño/2) {
+                System.out.println("🧭 Tienes la sensación de estar en una zona intermedia del laberinto.");
+            } else {
+                System.out.println("🗺️ Sientes que aún te queda un largo camino por recorrer.");
+            }
+        }
+    }
+
+    private static void procesarMovimiento() {
+        System.out.print("\n¿Hacia dónde quieres moverte? (W/A/S/D): ");
+        String movimiento = scn.nextLine().toUpperCase();
+        
+        int newX = posX;
+        int newY = posY;
+        
+        switch (movimiento) {
+            case "W": 
+                newX--; 
+                System.out.println("Te diriges hacia el norte...");
+                break;
+            case "S": 
+                newX++; 
+                System.out.println("Te diriges hacia el sur...");
+                break;
+            case "A": 
+                newY--; 
+                System.out.println("Te diriges hacia el oeste...");
+                break;
+            case "D": 
+                newY++; 
+                System.out.println("Te diriges hacia el este...");
+                break;
+            default: 
+                System.out.println("❌ Movimiento inválido! Usa W, A, S, D"); 
+                return;
+        }
+        
+        if (esMovimientoValido(newX, newY)) {
+            posX = newX;
+            posY = newY;
+            visitado[posX][posY] = true; // Marcar nueva posición como visitada
+            System.out.println("✅ Te mueves exitosamente.");
+        } else {
+            System.out.println("🚧 ¡Te topas con una pared! No puedes moverte en esa dirección.");
+        }
+    }
+
+    private static boolean esMovimientoValido(int x, int y) {
+        return x >= 0 && x < tamaño && 
+               y >= 0 && y < tamaño && 
+               (laberinto[x][y] == '-' || laberinto[x][y] == '*' || laberinto[x][y] == '=');
+    }
+
+    private static void verificarCasillaActual() {
+        char casilla = laberinto[posX][posY];
+        if (casilla == 'C') {
+            System.out.println("🐊 ¡COCODRILO! Un cocodrilo te ataca desde las sombras. Pierdes vida.");
+            vidaJugador -= 25;
+            if (vidaJugador <= 0) {
+                System.out.println("💀 El cocodrilo te ha derrotado...");
+            }
+        } else if (casilla == 'B') {
+            System.out.println("🏥 ¡BOTIQUÍN! Encuentras un botiquín médico. Recuperas vida.");
+            vidaJugador += 20;
+            if (vidaJugador > 100) {
+                vidaJugador = 100; // Limitar la vida máxima
+                System.out.println("💚 Tu vida está al máximo.");
+            }
+        }
+    }
+
+    private static boolean haGanado() {
+        return posX == tamaño-1 && posY == tamaño-1;
+    }
+
+    private static void guardarResultado(boolean salida) {
+        try (PreparedStatement ps = conexion.prepareStatement(
+            "INSERT INTO Ranking (usuario, vida, laberinto, salida) VALUES (?, ?, ?, ?)")) {
+            ps.setString(1, usuario);
+            ps.setInt(2, vidaJugador);
+            ps.setInt(3, 1); 
+            ps.setBoolean(4, salida);
+            ps.executeUpdate();
+            
+            if (salida) {
+                System.out.println("🏆 Tu resultado ha sido guardado en el ranking.");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al guardar resultado: " + e.getMessage());
+        }
+    }
+
+    private static void mostrarRanking() {
+        try (Statement stmt = conexion.createStatement()) {
+            ResultSet rs = stmt.executeQuery(
+                "SELECT usuario, vida, salida FROM Ranking ORDER BY vida DESC LIMIT 5"
+            );
+            
+            System.out.println("\n🏆 --- TOP 5 JUGADORES ---");
+            int posicion = 1;
+            while (rs.next()) {
+                String emoji = posicion == 1 ? "🥇" : posicion == 2 ? "🥈" : posicion == 3 ? "🥉" : "🏅";
+                System.out.printf(
+                    "%s %d. Usuario: %-15s Vida: %-5d Completado: %s%n",
+                    emoji,
+                    posicion,
+                    rs.getString("usuario"),
+                    rs.getInt("vida"),
+                    rs.getBoolean("salida") ? "Sí" : "No"
+                );
+                posicion++;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al obtener ranking: " + e.getMessage());
+        }
+    }
+
+    private static void cerrarConexion() {
+        try {
+            if (conexion != null) conexion.close();
+        } catch (SQLException e) {
+            System.err.println("Error al cerrar conexión: " + e.getMessage());
+        }
+    }
+}
