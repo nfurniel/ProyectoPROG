@@ -28,7 +28,7 @@ public class AdministradorBBDD {
     // Variables para la conexión a BD - CORREGIDO: cambiar nombre de BD
     private String database = "laberintobueno";		    
     private String login = "root"; 
-    private String pwd = "nevado2005";
+    private String pwd = "tucontraseña";
     private String url = "jdbc:mysql://localhost/" + database;
     private static Connection conexion;
 
