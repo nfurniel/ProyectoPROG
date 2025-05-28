@@ -25,10 +25,10 @@ public class AdministradorBBDD {
     // Variables para almacenar las puertas del laberinto
     private static List<Puerta> puertas = new ArrayList<>();
     
-    // Variables para la conexión a BD - CORREGIDO: cambiar nombre de BD
+    // Variables para la conexión a BD
     private String database = "laberintobueno";		    
     private String login = "root"; 
-    private String pwd = "tucontraseña";
+    private String pwd = "mysql";
     private String url = "jdbc:mysql://localhost/" + database;
     private static Connection conexion;
 
@@ -65,7 +65,7 @@ public class AdministradorBBDD {
             tamaño = solicitarTamañoLaberinto();
             solicitarElementos();
             inicializarLaberinto();
-            diseñarRutaPrincipal();
+            disenarRutaPrincipal();
             añadirCaminosAlternativos();
             extraerPuertasDelLaberinto();
             mostrarLaberintoFinal();
@@ -169,7 +169,7 @@ public class AdministradorBBDD {
         celdasVisitadas.add("0 0");
     }
 
-    private static void diseñarRutaPrincipal() {
+    private static void disenarRutaPrincipal() {
         System.out.println("\n--- Diseña la RUTA PRINCIPAL ('-') ---\n");
         System.out.println("Conecta desde (0 0) hasta (" + (tamaño - 1) + " " + (tamaño - 1) + ").");
         System.out.println("ATENCIÓN: No podrás volver a celdas ya visitadas en la ruta principal.");
@@ -225,7 +225,11 @@ public class AdministradorBBDD {
     }
 
     private static boolean esCoordenadaValidaRutaPrincipal(int fila, int col, int filaActual, int colActual) {
-        boolean esAdyacente = Math.abs(fila - filaActual) <= 1 && Math.abs(col - colActual) <= 1;
+        // Verificar que solo se mueva en una dirección (horizontal o vertical, no diagonal)
+        boolean movimientoHorizontal = (Math.abs(fila - filaActual) == 1) && (col == colActual);
+        boolean movimientoVertical = (Math.abs(col - colActual) == 1) && (fila == filaActual);
+        boolean esAdyacente = movimientoHorizontal || movimientoVertical;
+        
         boolean noVisitada = !celdasVisitadas.contains(fila + " " + col);
         
         if (fila == tamaño - 1 && col == tamaño - 1) {
@@ -304,7 +308,11 @@ public class AdministradorBBDD {
     }
 
     private static boolean esCoordenadaValida(int fila, int col, int filaActual, int colActual) {
-        return Math.abs(fila - filaActual) <= 1 && Math.abs(col - colActual) <= 1;
+        // Verificar que solo se mueva en una dirección (horizontal o vertical, no diagonal)
+        boolean movimientoHorizontal = (Math.abs(fila - filaActual) == 1) && (col == colActual);
+        boolean movimientoVertical = (Math.abs(col - colActual) == 1) && (fila == filaActual);
+        
+        return movimientoHorizontal || movimientoVertical;
     }
 
     // Método para extraer las "puertas" (caminos) del laberinto
@@ -396,21 +404,16 @@ public class AdministradorBBDD {
     }
     
     private static int insertarLaberinto() throws SQLException {
-        // CORREGIDO: Usar valores por defecto cuando no hay elementos configurados
-        String query = "INSERT INTO Laberintos (dimension1, dimension2, cocodrilos, botiquines, dmgCocodrilo, tiempoPregunta, dmgPregunta) " +
-                       "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String query = "INSERT INTO Laberintos (dimension1, dimension2, cocodrilos, botiquines, dmgCocodrilo) " +
+                       "VALUES (?, ?, ?, ?, ?)";
         
         try (PreparedStatement pstmt = conexion.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setInt(1, tamaño);
             pstmt.setInt(2, tamaño);
             pstmt.setInt(3, numCocodrilos);
             pstmt.setInt(4, numBotiquines);
-            // CORREGIDO: Usar valor por defecto si no hay cocodrilos configurados
             pstmt.setInt(5, vidaCocodrilos > 0 ? vidaCocodrilos : 25);
-            // CORREGIDO: Agregar valores por defecto para las nuevas columnas
-            pstmt.setInt(6, 30); // tiempoPregunta por defecto
-            pstmt.setInt(7, 10); // dmgPregunta por defecto
-            
+
             int filasAfectadas = pstmt.executeUpdate();
             if (filasAfectadas > 0) {
                 try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
